@@ -1,4 +1,9 @@
-from sqlalchemy.ext.asyncio import async_session, AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    async_session,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 # 数据库 URL
 ASYNC_DATABASE_URL = (
@@ -12,3 +17,22 @@ async_engine = create_async_engine(
     pool_size=10,  # 设置连接池中保持的持久连接数
     max_overflow=20,  # 设置连接池中的额外连接数
 )
+# 创建异步会话工厂
+AsyncSessionLocal = async_sessionmaker(
+    bind=async_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+
+# 依赖项，用于获取数据库会话
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
