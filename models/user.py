@@ -71,7 +71,7 @@ class UserToken(Base):
     user_id:Mapped[int] = mapped_column(Integer,ForeignKey(User.id),nullable=False,comment="用户ID")
     token:Mapped[str] = mapped_column(String(255),unique=True,nullable=False,comment="令牌值")
     expires_at:Mapped[datetime] = mapped_column(DateTime,nullable=False,comment="过期时间")
-    created_at : Mapped[datetime] = mapped_column(DateTime,default=datetime.now(),comment="创建时间")
+    created_at : Mapped[datetime] = mapped_column(DateTime,default=datetime.now,comment="创建时间")
 
     def __repr__(self):
         return f"<UserToken(id={self.id},Use.id={self.user_id},token='{self.token}')>"

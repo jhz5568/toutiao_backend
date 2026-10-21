@@ -3,15 +3,11 @@ from routers import news
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import users
+from utils.exception_handlers import register_exception_handlers
 
 app = FastAPI()
-
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+# 注册全局异常处理器
+register_exception_handlers(app)  # 注册全局异常处理
 
 # 全局配置中间件
 app.add_middleware(

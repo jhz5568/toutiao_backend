@@ -4,7 +4,6 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import user
 from models.user import User, UserToken
 from schemas.user import UserRequest
 from utils import security
@@ -45,3 +44,12 @@ async def create_token(db: AsyncSession, user_id: int):
     await db.commit()
 
     return token
+
+
+async def authenticate_user(db:AsyncSession,username:str,password:str):
+    user = await get_user_by_username(db,username)
+    if not user:
+        return None
+    if not security.verify_password(password,user.password):
+        return None
+    return user
