@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
 import uuid
 
-from sqlalchemy import select
+from fastapi import HTTPException
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import User, UserToken
-from schemas.user import UserRequest
+from schemas.user import UserChangePasswordResponse, UserRequest, UserUpdateRequest
 from utils import security
 
 
@@ -46,10 +47,58 @@ async def create_token(db: AsyncSession, user_id: int):
     return token
 
 
-async def authenticate_user(db:AsyncSession,username:str,password:str):
-    user = await get_user_by_username(db,username)
+# 用户登录
+async def authenticate_user(db: AsyncSession, username: str, password: str):
+    user = await get_user_by_username(db, username)
     if not user:
         return None
-    if not security.verify_password(password,user.password):
+    if not security.verify_password(password, user.password):
         return None
     return user
+
+
+# 根据 token查用户: 验证token是否有效 -> 查用户信息
+async def get_user_by_token(db: AsyncSession, token: str):
+    query = select(UserToken).where(UserToken.token == token)
+    result = await db.execute(query)
+    db_token = result.scalar_one_or_none()
+    if not db_token or db_token.expires_at < datetime.now():
+        return None
+
+    query = select(User).where(User.id == db_token.user_id)
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+
+# 更新用户信息: update更新 -> 检擦是否命中 -> 获取更新后的用户返回
+async def update_user_info(
+    db: AsyncSession, username: str, user_data: UserUpdateRequest
+):
+    query = (
+        update(User)
+        .where(User.username == username)
+        .values(**user_data.model_dump(exclude_unset=True, exclude_none=True))
+    )
+    result = await db.execute(query)
+    await db.commit()
+    # 检查更新
+    if result.rowcount == 0:
+        return HTTPException(status_code=404, detail="用户不存在")
+    # 获取更新后的用户信息
+    update_user = await get_user_by_username(db, username)
+    return update_user
+
+
+# 更新用户密码 token验证 -> 更新密码 -> 返回结果
+async def update_user_password(db: AsyncSession, user: User, password_data: UserChangePasswordResponse):
+    if not security.verify_password(password_data.old_password, user.password):
+        raise HTTPException(status_code=400, detail="旧密码错误")
+    hashed_password = security.get_hash_password(password_data.new_password)
+    query = (
+        update(User).where(User.username == user.username).values(password=hashed_password)
+    )
+    result = await db.execute(query)
+    await db.commit()
+    if result.rowcount == 0:
+        return HTTPException(status_code=404, detail="用户不存在")
+    return True

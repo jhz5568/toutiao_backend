@@ -2,10 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from config.db_conf import get_db
 from crud import users
-from schemas.user import UserAuthResponse, UserInfoResponse, UserRequest
+from models.user import User
+from schemas.user import (
+    UserAuthResponse,
+    UserChangePasswordResponse,
+    UserInfoResponse,
+    UserRequest,
+    UserUpdateRequest,
+)
 from starlette import status
 
 from utils.response import success_response
+from utils.auth import get_current_user
 
 router = APIRouter(prefix="/api/user", tags=["user"])
 
@@ -53,3 +61,40 @@ async def login(user_data: UserRequest, db: AsyncSession = Depends(get_db)):
         token=token, userInfo=UserInfoResponse.model_validate(user)
     )
     return success_response(message="登录成功", data=response_data)
+
+
+# 查token查用户 -> 封装crud -> -> 路由导入使用：依赖注入
+@router.get("/info")
+async def get_user_info(user: User = Depends(get_current_user)):
+    # 获取用户信息逻辑：验证用户是否存在 -> 获取用户信息 -> 响应结果
+    return success_response(
+        message="获取信息用户信息成功", data=UserInfoResponse.model_validate(user)
+    )
+
+
+# 修改用户信息：验证Token -> 更新（用户输入数据 put 提交 -> 请求体参数 -> 定义Pydantic模型类） -> 响应结果
+# 参数：用户输入的 + 验证 Token 的 + db（调用更新的方法）
+@router.put("/update")
+async def update_user_info(
+    user_data: UserUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    updated_user = await users.update_user_info(db, user.username, user_data)
+    return success_response(
+        message="更新用户信息成功", data=UserInfoResponse.model_validate(updated_user)
+    )
+
+# 修改密码：验证Token -> 更新（用户输入数据 put 提交 -> 请求体参数 -> 定义Pydantic模型类） -> 响应结果
+@router.put("/password")
+async def update_password(
+    password_data: UserChangePasswordResponse,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await users.update_user_password(db, user, password_data)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="修改密码失败"
+        )
+    return success_response(message="修改密码成功")
